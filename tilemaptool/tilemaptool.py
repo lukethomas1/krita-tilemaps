@@ -14,7 +14,7 @@ MASK_TEMPLATE = """
    <aX type="value" value="0"/>
    <aY type="value" value="0"/>
    <aZ type="value" value="RADIANS"/>
-   <cameraPos z="1024" type="vector3d" x="0" y="0"/>
+   <cameraPos z="CAMERA_SIZE" type="vector3d" x="0" y="0"/>
    <scaleX type="value" value="1"/>
    <scaleY type="value" value="1"/>
    <shearX type="value" value="0"/>
@@ -30,113 +30,102 @@ MASK_TEMPLATE = """
 class MyExtension(Extension):
 
     def __init__(self, parent):
-        # This is initialising the parent, always important when subclassing.
         super().__init__(parent)
 
-    def setup(self):
-        pass
-
     def createActions(self, window):
-        # action = window.createAction("clone_selected_to_tilemap", "~Clone active node into Tilemap~")
-        # action.triggered.connect(self.clone_selected_to_tilemap)
         action = window.createAction("generate_tilemap", "Generate TileMap")
         action.triggered.connect(self.generate_default_mask)
 
-    def print_test(self):
-        print("Hello world")
-
-    def clone_selected_to_tilemap(self):
-        doc = Krita.instance().activeDocument()
-        root = doc.rootNode()
-        node = doc.activeNode()
-        bounds = node.bounds()
-
-        # 0 indicates no tile
-        tile_locations = [
-                        [0, 0, 0, 1, 1, 0, 0, 0],
-                        [1, 0, 0, 1, 1, 1, 1, 1],
-                            [1, 0, 0, 1, 1, 1, 1, 1],
-                            [0, 1, 1, 1, 1, 1, 1, 0],
-                            [0, 1, 1, 1, 1, 1, 1, 0],
-                            [0, 0, 0, 0, 0, 1, 1, 0],
-                                [0, 0, 0, 0, 0, 1, 1, 0],
-                                [0, 0, 0, 1, 1, 0, 0, 0]
-        ]
-
-        tile_h = bounds.height()
-        tile_w = bounds.width()
-
-        for row in range(len(tile_locations)):
-            for column in range(len(tile_locations)):
-                if tile_locations[row][column] == 1:
-                    clone = doc.createCloneLayer(f"{node.name()}_{row}_{column}", doc.activeNode())
-                    offset_x = row * tile_w - bounds.x() 
-                    offset_y = column * tile_h - bounds.y()
-                    print(f"Row, column, offset_x, offset_y: {row}, {column}, {offset_x}, {offset_y}")
-                    clone.move(offset_y, --offset_x)
-                    root.addChildNode(clone, None)
-
     def generate_default_mask(self):
-        # There are 5 different tiles, each 256x256 pixels. The final tilemap will be 1024x1024 pixels.
-        # The tiles are named "mask_outer_corner", "mask_edge_connector", "mask_inner_corner", "mask_border", and "mask_fill".
-        # The following tuple arrays contain the locations of each tile and the rotation (clockwise, 90 degrees per rotation) of each tile in the final tilemap.
-        # The first number indicates how far to the right the tile is, the second number is how far down, and the third number is the rotation.
-        outer_corner_locations = [(0, 0, 0), (0, 2, 180), (1, 3, 270), (3, 3, 90)]
-        edge_connector_locations = [(0, 1, 0), (2, 3, 90)]
-        inner_corner_locations = [(1, 1, 0), (2, 0, 90), (3, 1, 180), (2, 2, 270)]
-        border_locations = [(1, 0, 0), (3, 0, 90), (1, 2, 270), (3, 2, 180)]
-        mask_fill_locations = [(2, 1, 0)]
-
         doc = Krita.instance().activeDocument()
+        
+        # Determine tile size based on the first mask
+        first_mask = doc.nodeByName("mask_outer_corner")
+        if not first_mask:
+            print("Error: mask_outer_corner not found. Make sure all mask layers are present.")
+            return
+        
+        tile_width = first_mask.bounds().width()
+        tile_height = first_mask.bounds().height()
+        tilemap_width = tile_width * 4
+        tilemap_height = tile_height * 4
+
+        # Check if document is large enough
+        if doc.width() < tilemap_width or doc.height() < tilemap_height:
+            print(f"Error: Document size must be at least {tilemap_width}x{tilemap_height} pixels.")
+            return
+
         group_layer = doc.createGroupLayer("clone_group")
         doc.rootNode().addChildNode(group_layer, None)
 
-        mask_outer_corner = doc.nodeByName(f"mask_outer_corner")
-        mask_edge_connector = doc.nodeByName(f"mask_edge_connector")
-        mask_inner_corner = doc.nodeByName(f"mask_inner_corner")
-        mask_border = doc.nodeByName(f"mask_border")
-        mask_fill = doc.nodeByName(f"mask_fill")
+        # Define mask types and their corresponding locations
+        mask_config = {
+            "mask_outer_corner": [(0, 0, 0), (0, 2, 180), (1, 3, 270), (3, 3, 90)],
+            "mask_edge_connector": [(0, 1, 0), (2, 3, 90)],
+            "mask_inner_corner": [(1, 1, 0), (2, 0, 90), (3, 1, 180), (2, 2, 270)],
+            "mask_border": [(1, 0, 0), (3, 0, 90), (1, 2, 270), (3, 2, 180)],
+            "mask_fill": [(2, 1, 0)]
+        }
 
-        if any(node is None for node in [mask_outer_corner, mask_edge_connector, mask_inner_corner, mask_border, mask_fill]):
-            print("One or more nodes not found. Please make sure all nodes are present in the document.")
-            print("Required node names: mask_outer_corner, mask_edge_connector, mask_inner_corner, mask_border, mask_fill")
+        # Get all mask nodes
+        mask_nodes = {name: doc.nodeByName(name) for name in mask_config.keys()}
+
+        # Check if all nodes are present
+        if None in mask_nodes.values():
+            missing_nodes = [name for name, node in mask_nodes.items() if node is None]
+            print(f"Nodes not found: {', '.join(missing_nodes)}")
+            print("Please make sure all nodes are present in the document.")
             return
-        
-        clones = []
-        for loc in outer_corner_locations:
-            clones.append(self.clone_move_rotate(mask_outer_corner, loc, group_layer))
-        for loc in edge_connector_locations:
-            clones.append(self.clone_move_rotate(mask_edge_connector, loc, group_layer))
-        for loc in inner_corner_locations:
-            clones.append(self.clone_move_rotate(mask_inner_corner, loc, group_layer))
-        for loc in border_locations:
-            clones.append(self.clone_move_rotate(mask_border, loc, group_layer))
-        for loc in mask_fill_locations:
-            clones.append(self.clone_move_rotate(mask_fill, loc, group_layer))
 
-    def clone_move_rotate(self, node, loc, group_layer) -> Node:
+        # Clone, move, and rotate all masks
+        for mask_name, locations in mask_config.items():
+            for loc in locations:
+                self.clone_move_rotate(mask_nodes[mask_name], loc, group_layer, tile_width, tile_height)
+
+    def clone_move_rotate(self, node, loc, group_layer, tile_width, tile_height) -> Node:
         doc = Krita.instance().activeDocument()
-        offset_x = loc[0] * 256 - node.bounds().x()
-        offset_y = loc[1] * 256 - node.bounds().y()
+        
+        # Calculate offset for the clone
+        offset_x = loc[0] * tile_width - node.bounds().x()
+        offset_y = loc[1] * tile_height - node.bounds().y()
+        
+        # Create a unique name for the clone
         name = f"{node.name()}_{loc[0]}_{loc[1]}"
+        
+        # Create and position the clone
         clone = doc.createCloneLayer(name, node)
         clone.move(offset_x, offset_y)
+        
+        # If rotation is needed
         if loc[2] != 0:
+            # Create and apply transform mask
             transform_mask = doc.createTransformMask(name + "_transform_mask")
             transform_mask.rotateNode(pi / 2 * loc[2])
+            
+            # Add clone to group and mask to clone
             group_layer.addChildNode(clone, None)
             clone.addChildNode(transform_mask, None)
-            template = MASK_TEMPLATE
-            template = template.replace("X_VALUE", str(transform_mask.bounds().x() + transform_mask.bounds().width() / 2))
-            template = template.replace("Y_VALUE", str(transform_mask.bounds().y() + transform_mask.bounds().height() / 2))
-            template = template.replace("RADIANS", str(2 * pi * (loc[2] / 360)))
-            success = transform_mask.fromXML(template)
-            if success:
-                print("Successfully applied rotation mask")
-        else:
             
+            # Prepare transform mask template
+            template = MASK_TEMPLATE
+            
+            # Calculate center point of the transform mask
+            center_x = transform_mask.bounds().x() + transform_mask.bounds().width() / 2
+            center_y = transform_mask.bounds().y() + transform_mask.bounds().height() / 2
+            
+            # Replace placeholder values in the template
+            template = template.replace("X_VALUE", str(center_x))
+            template = template.replace("Y_VALUE", str(center_y))
+            template = template.replace("RADIANS", str(2 * pi * (loc[2] / 360)))
+            
+            # Calculate and set camera size
+            camera_size = max(transform_mask.bounds().width(), transform_mask.bounds().height())
+            template = template.replace("CAMERA_SIZE", str(camera_size * 4))
+            
+            # Apply the transform mask
+            success = transform_mask.fromXML(template)
+        else:
+            # If no rotation, simply add the clone to the group
             group_layer.addChildNode(clone, None)
+        
         return clone
-
-# And add the extension to Krita's list of extensions:
-Krita.instance().addExtension(MyExtension(Krita.instance()))
