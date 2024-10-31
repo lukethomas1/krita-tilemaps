@@ -35,4 +35,5 @@ Python plugin for Krita to help with creating tilemaps & transparency masks.
 - A better way to specify the tile layers than hardcoded names.
 
 # Resources:
+- Krita's Introduction to Python Scripting https://docs.krita.org/en/user_manual/python_scripting/introduction_to_python_scripting.html
 - Video by jess:codes about dual-grid tilemaps https://www.youtube.com/watch?v=jEWFSv3ivTg&t=1s
