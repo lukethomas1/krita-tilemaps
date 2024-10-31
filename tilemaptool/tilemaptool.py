@@ -39,7 +39,7 @@ class MyExtension(Extension):
     def createActions(self, window):
         # action = window.createAction("clone_selected_to_tilemap", "~Clone active node into Tilemap~")
         # action.triggered.connect(self.clone_selected_to_tilemap)
-        action = window.createAction("generate_tilemap", "~Generate TileMap~")
+        action = window.createAction("generate_tilemap", "Generate TileMap")
         action.triggered.connect(self.generate_default_mask)
 
     def print_test(self):
