@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=Krita/PythonPlugin
+X-KDE-Library=tilemaptool
+X-Python-2-Compatible=false
+X-Krita-Manual=tilemaptool.html
+Name=TileMap Tool
+Comment=Tool to create and edit tilemaps
